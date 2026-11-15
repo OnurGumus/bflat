@@ -45,6 +45,35 @@
     <DownloadCachePath Condition="$(DownloadCachePath) == ''">$(BaseIntermediateOutputPath)</DownloadCachePath>
   </PropertyGroup>
 
+  <!--
+    JIT override. $(RuntimeVersion) is a .NET 10 RC1 snapshot, and RC1's x64 JIT
+    miscompiles stores like `staticStruct.FixedBuffer[i] = x`: it folds an unrelocated
+    JIT-EE handle into the address operand (no relocation is emitted), so the store
+    hits a bogus absolute address. Fixed upstream by .NET 10 GA. The JIT is a separate
+    library behind a stable JIT-EE interface, so the GA build from Microsoft's
+    ILCompiler package replaces the RC1 one in every layout. Remove this once
+    RuntimeVersion is based on .NET 10 GA or later.
+  -->
+  <PropertyGroup>
+    <GaJitVersion>10.0.0</GaJitVersion>
+    <GaJitUri>https://api.nuget.org/v3-flatcontainer/</GaJitUri>
+    <GaJitRid Condition="'$(CompilerHost)' == 'linux-glibc-x64'">linux-x64</GaJitRid>
+    <GaJitRid Condition="'$(CompilerHost)' == 'linux-glibc-arm64'">linux-arm64</GaJitRid>
+    <GaJitRid Condition="'$(CompilerHost)' == 'windows-x64'">win-x64</GaJitRid>
+    <GaJitRid Condition="'$(CompilerHost)' == 'windows-arm64'">win-arm64</GaJitRid>
+    <GaJitPackageId>runtime.$(GaJitRid).microsoft.dotnet.ilcompiler</GaJitPackageId>
+    <GaJitPackageFile>$(GaJitPackageId).$(GaJitVersion).nupkg</GaJitPackageFile>
+  </PropertyGroup>
+
+  <Target Name="DownloadGaJit"
+          Condition="!Exists('$(DownloadCachePath)$(GaJitPackageFile)')">
+    <Error Condition="'$(GaJitRid)' == ''" Text="No GA JIT package known for compiler host '$(CompilerHost)'." />
+    <DownloadFile SourceUrl="$(GaJitUri)$(GaJitPackageId)/$(GaJitVersion)/$(GaJitPackageFile)"
+                  Retries="3"
+                  DestinationFolder="$(DownloadCachePath)"
+                  DestinationFileName="$(GaJitPackageFile)" />
+  </Target>
+
   <ItemGroup>
     <SupportedHost Include="windows-x64">
       <OS>windows</OS>
@@ -124,13 +153,25 @@
   </Target>
 
   <Target Name="ExtractHostCompiler"
-          Inputs="$(DownloadCachePath)bflat-compiler-native-$(CompilerHost)-$(RuntimeVersion).zip"
-          Outputs="$(IntermediateOutputPath)bflat-compiler-native-$(CompilerHost)-$(RuntimeVersion).semaphore">
+          DependsOnTargets="DownloadGaJit"
+          Inputs="$(DownloadCachePath)bflat-compiler-native-$(CompilerHost)-$(RuntimeVersion).zip;$(DownloadCachePath)$(GaJitPackageFile)"
+          Outputs="$(IntermediateOutputPath)bflat-compiler-native-$(CompilerHost)-$(RuntimeVersion)-jit$(GaJitVersion).semaphore">
 
     <Unzip SourceFiles="$(DownloadCachePath)bflat-compiler-native-$(CompilerHost)-$(RuntimeVersion).zip"
            DestinationFolder="$(OutputPath)" />
 
-    <Touch Files="$(IntermediateOutputPath)\bflat-compiler-native-$(CompilerHost)-$(RuntimeVersion).semaphore"
+    <!-- Overlay the GA JITs (see GaJitVersion above). jitinterface stays: it belongs to ILC. -->
+    <Unzip SourceFiles="$(DownloadCachePath)$(GaJitPackageFile)"
+           DestinationFolder="$(IntermediateOutputPath)gajit-$(CompilerHost)"
+           Include="tools/*clrjit_*" />
+    <ItemGroup>
+      <GaJitFile Include="$(IntermediateOutputPath)gajit-$(CompilerHost)/tools/*clrjit_*" />
+    </ItemGroup>
+    <Error Condition="'@(GaJitFile)' == ''" Text="No JIT libraries found in $(GaJitPackageFile)." />
+    <Copy SourceFiles="@(GaJitFile)" DestinationFolder="$(OutputPath)" />
+    <Message Text="Using .NET $(GaJitVersion) GA JITs for $(CompilerHost): @(GaJitFile->'%(Filename)%(Extension)', ' ')" Importance="High" />
+
+    <Touch Files="$(IntermediateOutputPath)\bflat-compiler-native-$(CompilerHost)-$(RuntimeVersion)-jit$(GaJitVersion).semaphore"
            AlwaysCreate="true" />
   </Target>
 
