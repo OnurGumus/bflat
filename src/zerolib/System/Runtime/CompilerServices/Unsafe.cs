@@ -35,5 +35,18 @@ namespace System.Runtime.CompilerServices
         [Intrinsic]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static extern IntPtr ByteOffset<T>(ref readonly T origin, ref readonly T target);
+        [Intrinsic]
+        public static extern ref T AsRef<T>(ref readonly T source);
+        // NOTE: Unsafe.SizeOf<T>() is deliberately absent - ILC does not expand it in
+        // zerolib mode. Use the SizePair<T>/ByteOffset trick instead; it constant-folds
+        // and also works for managed T.
+        [Intrinsic]
+        public static extern ref T NullRef<T>();
+        [Intrinsic]
+        public static extern bool IsNullRef<T>(ref readonly T source);
+        [Intrinsic]
+        public static extern ref T AddByteOffset<T>(ref T source, nuint byteOffset);
+        [Intrinsic]
+        public static extern void SkipInit<T>(out T value);
     }
 }

@@ -57,18 +57,32 @@ namespace System
         {
             const int BufferSize = 16;
             char* pBuffer = stackalloc char[BufferSize];
+
+            // Build the digits from the magnitude as a uint. Doing the modulo on a negative
+            // int yields negative digits ('0' + -5 == '+'), and negating int.MinValue as an
+            // int overflows back to itself.
+            uint magnitude;
             if (i < 0)
             {
                 Write('-');
+                magnitude = 0u - (uint)i;
+            }
+            else
+            {
+                magnitude = (uint)i;
             }
 
             char* pEnd = &pBuffer[BufferSize - 1];
             char* pCurrent = pEnd;
             do
             {
-                *(pCurrent--) = (char)((i % 10) + '0');
-                i /= 10;
-            } while (i != 0);
+                *(pCurrent--) = (char)((magnitude % 10) + '0');
+                magnitude /= 10;
+            } while (magnitude != 0);
+
+            // The loop leaves pCurrent one slot below the most significant digit; without
+            // this the first character written is whatever was on the stack.
+            pCurrent++;
 
             while (pCurrent <= pEnd)
                 Write(*(pCurrent++));

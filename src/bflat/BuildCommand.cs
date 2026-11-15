@@ -51,6 +51,8 @@ internal class BuildCommand : CommandBase
 
     private static Option<bool> NoLinkOption = new Option<bool>("-c", "Produce object file, but don't run linker");
     private static Option<bool> MstatOption = new Option<bool>("--mstat", "Produce MSTAT and DGML files for size analysis");
+
+    private static Option<bool> ArenaChecksOption = new Option<bool>("--arena-checks", "Link the checked build of the arena standard library (--stdlib:arena only)");
     private static Option<string[]> LdFlagsOption = new Option<string[]>(new string[] { "--ldflags" }, "Arguments to pass to the linker");
     private static Option<bool> PrintCommandsOption = new Option<bool>("-x", "Print the commands");
 
@@ -122,6 +124,7 @@ internal class BuildCommand : CommandBase
             FeatureSwitchOption,
             CommonOptions.ResourceOption,
             CommonOptions.StdLibOption,
+            ArenaChecksOption,
             CommonOptions.DeterministicOption,
             CommonOptions.VerbosityOption,
             CommonOptions.LangVersionOption,
@@ -162,6 +165,9 @@ internal class BuildCommand : CommandBase
             optimizationMode = OptimizationMode.None;
 
         StandardLibType stdlib = result.GetValueForOption(CommonOptions.StdLibOption);
+        bool arenaChecks = result.GetValueForOption(ArenaChecksOption);
+        if (arenaChecks && stdlib != StandardLibType.Arena)
+            throw new Exception("--arena-checks requires --stdlib:arena");
         string[] userSpecifiedInputFiles = result.GetValueForArgument(CommonOptions.InputFilesArgument);
         string[] inputFiles = CommonOptions.GetInputFiles(userSpecifiedInputFiles);
         string[] defines = result.GetValueForOption(CommonOptions.DefinedSymbolsOption);
@@ -315,7 +321,7 @@ internal class BuildCommand : CommandBase
         string systemModuleName = DefaultSystemModule;
         if (stdlib == StandardLibType.None && references.Length == 0)
             systemModuleName = compiledModuleName;
-        if (stdlib == StandardLibType.Zero)
+        if (stdlib is StandardLibType.Zero or StandardLibType.Arena)
             systemModuleName = "zerolib";
 
         if (stdlib != StandardLibType.DotNet)
@@ -352,6 +358,23 @@ internal class BuildCommand : CommandBase
         string libc = result.GetValueForOption(TargetLibcOption);
 
         string homePath = CommonOptions.HomePath;
+
+        string osPart = targetOS switch
+        {
+            TargetOS.Linux => "linux",
+            TargetOS.Windows => "windows",
+            TargetOS.UEFI => "uefi",
+            _ => throw new Exception(targetOS.ToString()),
+        };
+
+        string archPart = targetArchitecture switch
+        {
+            TargetArchitecture.ARM64 => "arm64",
+            TargetArchitecture.X64 => "x64",
+            TargetArchitecture.X86 => "x86",
+            _ => throw new Exception(targetArchitecture.ToString()),
+        };
+
         string libPath = Environment.GetEnvironmentVariable("BFLAT_LIB");
         if (libPath == null)
         {
@@ -361,23 +384,9 @@ internal class BuildCommand : CommandBase
 
             libPath = currentLibPath;
 
-            string osPart = targetOS switch
-            {
-                TargetOS.Linux => "linux",
-                TargetOS.Windows => "windows",
-                TargetOS.UEFI => "uefi",
-                _ => throw new Exception(targetOS.ToString()),
-            };
             currentLibPath = Path.Combine(currentLibPath, osPart);
             libPath = currentLibPath + separator + libPath;
 
-            string archPart = targetArchitecture switch
-            {
-                TargetArchitecture.ARM64 => "arm64",
-                TargetArchitecture.X64 => "x64",
-                TargetArchitecture.X86 => "x86",
-                _ => throw new Exception(targetArchitecture.ToString()),
-            };
             currentLibPath = Path.Combine(currentLibPath, archPart);
             libPath = currentLibPath + separator + libPath;
 
@@ -396,12 +405,54 @@ internal class BuildCommand : CommandBase
 
         if (stdlib != StandardLibType.None)
         {
-            string mask = stdlib == StandardLibType.DotNet ? "*.dll" : "zerolib.dll";
-
-            foreach (var reference in EnumerateExpandedDirectories(libPath, mask))
+            // These masks replace the ref/ paths seeded above with the correct per-target
+            // implementation assemblies. Anything missed here silently keeps the ref/ copy,
+            // which is built for LINUX/X64 - i.e. wrong code compiled into the image with
+            // no diagnostic.
+            string[] masks = stdlib switch
             {
-                string assemblyName = Path.GetFileNameWithoutExtension(reference);
-                referenceFilePaths[assemblyName] = reference;
+                StandardLibType.DotNet => new[] { "*.dll" },
+                StandardLibType.Arena => new[] { "zerolib.dll", "arenalib.dll" },
+                _ => new[] { "zerolib.dll" },
+            };
+
+            foreach (string mask in masks)
+            {
+                foreach (var reference in EnumerateExpandedDirectories(libPath, mask))
+                {
+                    string assemblyName = Path.GetFileNameWithoutExtension(reference);
+                    referenceFilePaths[assemblyName] = reference;
+                }
+            }
+
+            // The checked build of arenalib lives in a sibling tree so that `debloat` (which
+            // only ever walks lib/) cannot try to hoist it over the release copy. It keeps
+            // the file name arenalib.dll on purpose: build-il derives the assembly's simple
+            // name from the output file name, so renaming it would break resolution.
+            if (stdlib == StandardLibType.Arena && arenaChecks)
+            {
+                string checkedRoot = Path.Combine(homePath, "libchk");
+                string[] candidates =
+                {
+                    Path.Combine(checkedRoot, osPart, archPart, "arenalib.dll"),
+                    Path.Combine(checkedRoot, osPart, "arenalib.dll"),
+                    Path.Combine(checkedRoot, "arenalib.dll"),
+                };
+
+                string checkedPath = null;
+                foreach (string candidate in candidates)
+                {
+                    if (File.Exists(candidate))
+                    {
+                        checkedPath = candidate;
+                        break;
+                    }
+                }
+
+                if (checkedPath == null)
+                    throw new Exception($"--arena-checks: no checked build of arenalib found under '{checkedRoot}'");
+
+                referenceFilePaths["arenalib"] = checkedPath;
             }
         }
 
@@ -872,7 +923,7 @@ internal class BuildCommand : CommandBase
                 ldArgs.Append("/merge:.modules=.rdata ");
                 ldArgs.Append("/merge:.managedcode=.text ");
 
-                if (stdlib == StandardLibType.Zero)
+                if (stdlib is StandardLibType.Zero or StandardLibType.Arena)
                 {
                     if (targetArchitecture is TargetArchitecture.ARM64 or TargetArchitecture.X86)
                         ldArgs.Append("zerolibnative.obj ");
@@ -987,7 +1038,7 @@ internal class BuildCommand : CommandBase
                     if (libc != "bionic")
                         ldArgs.Append("-lSystem.Globalization.Native -lSystem.Net.Security.Native ");
                 }
-                else if (stdlib == StandardLibType.Zero)
+                else if (stdlib is StandardLibType.Zero or StandardLibType.Arena)
                 {
                     if (targetArchitecture == TargetArchitecture.ARM64)
                         ldArgs.Append($"\"{firstLib}/libzerolibnative.o\" ");

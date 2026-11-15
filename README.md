@@ -25,7 +25,7 @@ bflat can currently target:
 * x64/arm64 glibc-based Linux (2.17 or later on x64 (~CentOS 7), or 2.27 or later on arm64 (~Ubuntu 18.04))
 * arm64 bionic-based Linux (Android API level 21)
 * x64/arm64 Windows (Windows 7 or later)
-* x64/arm64 UEFI (only with `--stdlib:zero`)
+* x64/arm64 UEFI (only with `--stdlib:zero` or `--stdlib:arena`)
 
 Support for musl-based Linux is in the works.
 
@@ -49,9 +49,15 @@ That's the point. bflat is to dotnet as VS Code is to VS.
 
 The source code is split between this repo and [bflattened/runtime](https://github.com/bflattened/runtime). The bflattened/runtime repo is a regularly updated fork of the [dotnet/runtime](https://github.com/dotnet/runtime) repo that contains non-upstreamable bflat-specific changes. The bflattened/runtime repo produces compiler and runtime binaries that this repo consumes.
 
-## 📚 Two standard libraries
+## 📚 Three standard libraries
 
-bflat comes with two standard libraries. The first one (called `DotNet`) is the default and comes from the dotnet/runtime repo fork. It includes everything you know and love from .NET. The second one (called `Zero`) is a minimal standard library that doesn't have much more than just primitive types. The source code for it lives in this repo. Switch between those with `--stdlib:zero` argument.
+bflat comes with three standard libraries:
+
+* `DotNet` is the default and comes from the dotnet/runtime repo fork. It includes everything you know and love from .NET.
+* `Zero` is a minimal standard library that doesn't have much more than just primitive types. It has no GC, and nothing it allocates is ever freed. Select it with `--stdlib:zero`.
+* `Arena` is `Zero` plus an arena-native standard library: explicit region lifetimes, UTF-8 strings, arena-owned collections, and `Result`/`Option` instead of exceptions. Select it with `--stdlib:arena`. Add `--arena-checks` to link the checked build, which validates arena lifetimes at runtime (use-after-rewind, LIFO violations, double dispose) at zero cost to release builds.
+
+The source code for `Zero` and `Arena` lives in this repo, under `src/zerolib` and `src/arenalib`.
 
 ## 📻 How to stay up-to-date on bflat?
 

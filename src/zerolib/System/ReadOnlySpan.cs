@@ -21,10 +21,12 @@ namespace System
 {
     public readonly ref struct ReadOnlySpan<T>
     {
-        private readonly ref T _reference;
+        internal readonly ref T _reference;
         private readonly int _length;
 
         public int Length => _length;
+
+        public bool IsEmpty => _length == 0;
 
         public ReadOnlySpan(T[] array)
         {
@@ -76,6 +78,58 @@ namespace System
                     Environment.FailFast(null);
                 return ref Unsafe.Add(ref _reference, (nint)(uint)index);
             }
+        }
+
+        public ReadOnlySpan<T> Slice(int start)
+        {
+            if ((uint)start > (uint)_length)
+                Environment.FailFast(null);
+
+            return MemoryMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref _reference, (nint)(uint)start), _length - start);
+        }
+
+        public ReadOnlySpan<T> Slice(int start, int length)
+        {
+#if X64 || ARM64
+            if ((ulong)(uint)start + (ulong)(uint)length > (ulong)(uint)_length)
+                Environment.FailFast(null);
+#elif X86 || ARM
+            if ((uint)start > (uint)_length || (uint)length > (uint)(_length - start))
+                Environment.FailFast(null);
+#else
+#error Nope
+#endif
+
+            return MemoryMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref _reference, (nint)(uint)start), length);
+        }
+
+        public void CopyTo(Span<T> destination)
+        {
+            if (!TryCopyTo(destination))
+                Environment.FailFast(null);
+        }
+
+        public unsafe bool TryCopyTo(Span<T> destination)
+        {
+            if ((uint)_length > (uint)destination.Length)
+                return false;
+
+            // Overlap-safe: copy in whichever direction doesn't clobber the source.
+            byte* src = (byte*)Unsafe.AsPointer(ref _reference);
+            byte* dst = (byte*)Unsafe.AsPointer(ref destination._reference);
+
+            if (dst <= src)
+            {
+                for (int i = 0; i < _length; i++)
+                    Unsafe.Add(ref destination._reference, i) = Unsafe.Add(ref _reference, i);
+            }
+            else
+            {
+                for (int i = _length - 1; i >= 0; i--)
+                    Unsafe.Add(ref destination._reference, i) = Unsafe.Add(ref _reference, i);
+            }
+
+            return true;
         }
 
         public static implicit operator ReadOnlySpan<T>(T[] array) => new ReadOnlySpan<T>(array);

@@ -247,6 +247,49 @@
           WorkingDirectory="$(MSBuildThisFileDirectory)..\zerolib" />
     <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -d LINUX -d X64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\ref\zerolib.dll&quot;"
           WorkingDirectory="$(MSBuildThisFileDirectory)..\zerolib" />
+
+    <!-- arenalib: must run AFTER the zerolib builds above, since each per-target
+         arenalib is compiled against the matching per-target zerolib. Referencing
+         ref\zerolib.dll instead would be wrong: zerolib's *public* surface is not
+         target-invariant (e.g. Environment.SystemNative_GetTimestamp is public only
+         in the LINUX build). -->
+    <MakeDir Directories="$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\linux\x64" Condition="!Exists('$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\linux\x64')" />
+    <MakeDir Directories="$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\linux\arm64" Condition="!Exists('$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\linux\arm64')" />
+    <MakeDir Directories="$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\windows\x64" Condition="!Exists('$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\windows\x64')" />
+    <MakeDir Directories="$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\windows\arm64" Condition="!Exists('$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\windows\arm64')" />
+    <MakeDir Directories="$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\windows\x86" Condition="!Exists('$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\windows\x86')" />
+    <MakeDir Directories="$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\uefi\x64" Condition="!Exists('$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\uefi\x64')" />
+    <MakeDir Directories="$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\uefi\arm64" Condition="!Exists('$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\uefi\arm64')" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\linux\x64\zerolib.dll&quot; -d LINUX -d X64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\linux\x64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\linux\x64\zerolib.dll&quot; -d LINUX -d X64 -d ARENA_CHECKS -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\linux\x64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\linux\arm64\zerolib.dll&quot; -d LINUX -d ARM64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\linux\arm64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\linux\arm64\zerolib.dll&quot; -d LINUX -d ARM64 -d ARENA_CHECKS -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\linux\arm64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\x64\zerolib.dll&quot; -d WINDOWS -d X64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\x64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\x64\zerolib.dll&quot; -d WINDOWS -d X64 -d ARENA_CHECKS -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\windows\x64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\arm64\zerolib.dll&quot; -d WINDOWS -d ARM64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\arm64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\arm64\zerolib.dll&quot; -d WINDOWS -d ARM64 -d ARENA_CHECKS -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\windows\arm64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\x86\zerolib.dll&quot; -d WINDOWS -d X86 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\x86\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\x86\zerolib.dll&quot; -d WINDOWS -d X86 -d ARENA_CHECKS -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\windows\x86\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\uefi\x64\zerolib.dll&quot; -d UEFI -d X64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\uefi\x64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\uefi\x64\zerolib.dll&quot; -d UEFI -d X64 -d ARENA_CHECKS -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\uefi\x64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\uefi\arm64\zerolib.dll&quot; -d UEFI -d ARM64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\uefi\arm64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\uefi\arm64\zerolib.dll&quot; -d UEFI -d ARM64 -d ARENA_CHECKS -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\libchk\uefi\arm64\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -r:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\ref\zerolib.dll&quot; -d LINUX -d X64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\ref\arenalib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\arenalib" />
   </Target>
 
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />

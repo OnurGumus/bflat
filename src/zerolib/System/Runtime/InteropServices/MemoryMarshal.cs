@@ -31,5 +31,11 @@ namespace System.Runtime.InteropServices
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe static System.ReadOnlySpan<T> CreateReadOnlySpan<T>(ref T reference, int length)
             => new System.ReadOnlySpan<T>(Unsafe.AsPointer(ref reference), length);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ref T GetReference<T>(System.Span<T> span) => ref span._reference;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ref T GetReference<T>(System.ReadOnlySpan<T> span) => ref span._reference;
     }
 }

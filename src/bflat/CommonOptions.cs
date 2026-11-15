@@ -96,6 +96,12 @@ internal static class CommonOptions
         return Directory.EnumerateFiles(Directory.GetCurrentDirectory(), "*.cs", SearchOption.AllDirectories).ToArray();
     }
 
+    // Assemblies that belong to the non-DotNet standard libraries. These live in the same
+    // ref/ directory as the DotNet reference assemblies and must never be handed to a
+    // DotNet build - zerolib defines its own System.Object/System.String, so leaking it in
+    // produces a wall of CS0433 ambiguity errors.
+    private static readonly string[] s_nonDotNetRefAssemblies = { "zerolib.dll", "arenalib.dll" };
+
     public static string[] GetReferencePaths(string[] referencePaths, StandardLibType stdlib)
     {
         if (stdlib == StandardLibType.None)
@@ -103,16 +109,32 @@ internal static class CommonOptions
 
         List<string> result = new List<string>(referencePaths);
         string refPath = Path.Combine(HomePath, "ref");
-        if (stdlib == StandardLibType.Zero)
+        if (stdlib is StandardLibType.Zero or StandardLibType.Arena)
         {
             result.Add(Path.Combine(refPath, "zerolib.dll"));
+
+            // Arena is Zero plus the arena standard library layered on top.
+            if (stdlib == StandardLibType.Arena)
+                result.Add(Path.Combine(refPath, "arenalib.dll"));
         }
         else
         {
             foreach (var f in Directory.GetFiles(refPath, "*.dll"))
             {
-                if (f.EndsWith("zerolib.dll"))
+                string fileName = Path.GetFileName(f);
+                bool isStdLibAssembly = false;
+                foreach (var name in s_nonDotNetRefAssemblies)
+                {
+                    if (fileName.Equals(name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        isStdLibAssembly = true;
+                        break;
+                    }
+                }
+
+                if (isStdLibAssembly)
                     continue;
+
                 result.Add(f);
             }
         }
@@ -150,9 +172,12 @@ public enum BuildTargetType
 
 public enum StandardLibType
 {
+    // DotNet must stay first: StdLibOption has no explicit default, so an unspecified
+    // --stdlib binds to default(StandardLibType). Append new members at the end.
     DotNet,
     None,
     Zero,
+    Arena,
 }
 
 public enum TargetOS
