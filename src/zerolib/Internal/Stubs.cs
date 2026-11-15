@@ -51,6 +51,11 @@ namespace Internal.Runtime.CompilerHelpers
         static void ThrowIndexOutOfRangeException() => Environment.FailFast(null);
         static void ThrowDivideByZeroException() => Environment.FailFast(null);
         static void ThrowPlatformNotSupportedException() => Environment.FailFast(null);
+
+        // Needed by checked arithmetic (checked(...), stackalloc of nint/nuint/struct
+        // elements) and, on arm64, by every integer / and %. Without it the compiler
+        // fails with "Expected method 'ThrowOverflowException' not found".
+        static void ThrowOverflowException() => Environment.FailFast(null);
     }
 
     // A class that the compiler looks for that has helpers to initialize the
