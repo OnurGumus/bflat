@@ -54,4 +54,7 @@ namespace System.Runtime.CompilerServices
     }
 
     public sealed class ExtensionAttribute : Attribute { }
+
+    // Required modifier the C# compiler puts on volatile fields (used by Volatile).
+    public static class IsVolatile { }
 }
