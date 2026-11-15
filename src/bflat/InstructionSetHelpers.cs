@@ -46,7 +46,8 @@ namespace System.CommandLine
         }
 
         public static InstructionSetSupport ConfigureInstructionSetSupport(string instructionSet, int maxVectorTBitWidth, bool isVectorTOptimistic, TargetArchitecture targetArchitecture, Internal.TypeSystem.TargetOS targetOS,
-            string mustNotBeMessage, string invalidImplicationMessage, Logger logger, bool optimizingForSize = false)
+            string mustNotBeMessage, string invalidImplicationMessage, Logger logger, bool optimizingForSize = false,
+            bool hasRuntimeCpuDetection = true)
         {
             InstructionSetSupportBuilder instructionSetSupportBuilder = new(targetArchitecture);
 
@@ -72,6 +73,13 @@ namespace System.CommandLine
             // We seed this from optimizingForSize - if we're size-optimizing, we don't want to unnecessarily
             // compile both branches of IsSupported checks.
             bool allowOptimistic = !optimizingForSize;
+
+            // Optimistic instruction sets compile IsSupported into a run-time check of
+            // g_cpuFeatures, which only the .NET runtime defines and initializes. Without
+            // it (--stdlib:zero/none) that fails to link, so only the instruction sets
+            // given with -m (plus the baseline) count as supported.
+            if (!hasRuntimeCpuDetection)
+                allowOptimistic = false;
 
             bool throttleAvx512 = false;
 

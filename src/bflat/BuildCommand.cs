@@ -316,7 +316,8 @@ internal class BuildCommand : CommandBase
         string isaArg = result.GetValueForOption(TargetIsaOption);
         InstructionSetSupport instructionSetSupport = Helpers.ConfigureInstructionSetSupport(isaArg, maxVectorTBitWidth: 0, isVectorTOptimistic: false, targetArchitecture, tsTargetOs,
                 "Unrecognized instruction set {0}", "Unsupported combination of instruction sets: {0}/{1}", logger,
-                optimizingForSize: optimizationMode == OptimizationMode.PreferSize);
+                optimizingForSize: optimizationMode == OptimizationMode.PreferSize,
+                hasRuntimeCpuDetection: stdlib == StandardLibType.DotNet);
 
         bool disableReflection = result.GetValueForOption(NoReflectionOption);
         bool disableStackTraceData = result.GetValueForOption(NoStackTraceDataOption) || stdlib != StandardLibType.DotNet;
