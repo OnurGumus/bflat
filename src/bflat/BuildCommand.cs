@@ -128,6 +128,7 @@ internal class BuildCommand : CommandBase
             CommonOptions.DeterministicOption,
             CommonOptions.VerbosityOption,
             CommonOptions.LangVersionOption,
+            CommonOptions.CompilerFeaturesOption,
         };
         command.Handler = new BuildCommand();
 
@@ -237,7 +238,8 @@ internal class BuildCommand : CommandBase
             buildTargetType,
             targetArchitecture,
             targetOS,
-            result.GetValueForOption(CommonOptions.LangVersionOption));
+            result.GetValueForOption(CommonOptions.LangVersionOption),
+            result.GetValueForOption(CommonOptions.CompilerFeaturesOption));
         createCompilationWatch.Complete();
 
         bool nativeLib;

@@ -16,7 +16,10 @@
     <BlobsVersion>1.3</BlobsVersion>
     <BlobsUri>https://github.com/bflattened/blobs/releases/download/</BlobsUri>
 
-    <MicrosoftCodeAnalysisCSharpVersion>5.0.0-2.final</MicrosoftCodeAnalysisCSharpVersion>
+    <!-- 5.12.0 is the Roslyn shipped with the .NET 11 SDK: C# 15, including the
+         updated memory safety rules (preview). Enable them with the langversion
+         option set to preview plus compiler-feature updated-memory-safety-rules. -->
+    <MicrosoftCodeAnalysisCSharpVersion>5.12.0</MicrosoftCodeAnalysisCSharpVersion>
   </PropertyGroup>
 
   <ItemGroup>

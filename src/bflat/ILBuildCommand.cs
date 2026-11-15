@@ -52,6 +52,7 @@ internal class ILBuildCommand : CommandBase
             CommonOptions.ResourceOption,
             CommonOptions.NoDebugInfoOption,
             CommonOptions.LangVersionOption,
+            CommonOptions.CompilerFeaturesOption,
             OptimizeOption,
         };
         command.Handler = new ILBuildCommand();
@@ -81,7 +82,8 @@ internal class ILBuildCommand : CommandBase
             optimizationLevel,
             buildTargetType,
             deterministic,
-            result.GetValueForOption(CommonOptions.LangVersionOption));
+            result.GetValueForOption(CommonOptions.LangVersionOption),
+            result.GetValueForOption(CommonOptions.CompilerFeaturesOption));
 
         DebugInformationFormat debugInfoFormat = result.GetValueForOption(CommonOptions.NoDebugInfoOption)
             ? 0 : DebugInformationFormat.Embedded;
@@ -137,7 +139,8 @@ internal class ILBuildCommand : CommandBase
         BuildTargetType buildTargetType,
         TargetArchitecture arch,
         TargetOS os,
-        string languageVersion)
+        string languageVersion,
+        string[] compilerFeatures)
     {
         List<string> defines = new List<string>(userDefines)
         {
@@ -160,7 +163,8 @@ internal class ILBuildCommand : CommandBase
             optimizationLevel,
             buildTargetType,
             deterministic: true,
-            languageVersion);
+            languageVersion,
+            compilerFeatures);
     }
 
     private static CSharpCompilation CreateCompilation(
@@ -171,7 +175,8 @@ internal class ILBuildCommand : CommandBase
         OptimizationLevel optimizationLevel,
         BuildTargetType buildTargetType,
         bool deterministic,
-        string languageVersion)
+        string languageVersion,
+        string[] compilerFeatures)
     {
         OutputKind? outputKind = buildTargetType switch
         {
@@ -195,14 +200,16 @@ internal class ILBuildCommand : CommandBase
             throw new Exception($"Language version '{languageVersion}' not recognized");
         }
 
+        CSharpParseOptions parseOptions = new CSharpParseOptions(
+                languageVersion: langVer,
+                documentationMode: DocumentationMode.None,
+                preprocessorSymbols: defines)
+            .WithFeatures(CommonOptions.ParseCompilerFeatures(compilerFeatures));
+
         var trees = new List<SyntaxTree>();
         foreach (var sourceFile in inputFiles)
         {
             var st = SourceText.From(File.OpenRead(sourceFile));
-            CSharpParseOptions parseOptions = new CSharpParseOptions(
-                languageVersion: langVer,
-                documentationMode: DocumentationMode.None,
-                preprocessorSymbols: defines);
             string path = sourceFile;
             if (!Path.IsPathRooted(sourceFile))
                 path = Path.GetFullPath(sourceFile, Directory.GetCurrentDirectory());

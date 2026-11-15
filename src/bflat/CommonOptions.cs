@@ -73,6 +73,27 @@ internal static class CommonOptions
         new Option<string>("--langversion",
             "C# language version ('latest', 'default', 'latestmajor', 'preview', or version like '6' or '7.1'");
 
+    // Same as csc's -features: switch. Example: --compiler-feature updated-memory-safety-rules
+    public static Option<string[]> CompilerFeaturesOption =
+        new Option<string[]>(new string[] { "--compiler-feature" },
+            "C# compiler feature flag 'name' or 'name=value' (same as csc -features:), e.g. updated-memory-safety-rules");
+
+    // Turns 'name' / 'name=value' entries into Roslyn parse-option features. A bare name
+    // means "true", matching csc's command-line parser.
+    public static IEnumerable<KeyValuePair<string, string>> ParseCompilerFeatures(string[] features)
+    {
+        if (features == null)
+            yield break;
+
+        foreach (string feature in features)
+        {
+            int eq = feature.IndexOf('=');
+            yield return eq < 0
+                ? new KeyValuePair<string, string>(feature, "true")
+                : new KeyValuePair<string, string>(feature.Substring(0, eq), feature.Substring(eq + 1));
+        }
+    }
+
     public static string GetOutputFileNameWithoutSuffix(string[] inputFileNames)
     {
         string outputFileName;
