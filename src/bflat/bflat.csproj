@@ -274,6 +274,8 @@
              Condition="!Exists('$(LayoutsDirectory)%(SupportedHost.Identity)\lib\uefi\arm64')" />
     <MakeDir Directories="$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\x86"
              Condition="!Exists('$(LayoutsDirectory)%(SupportedHost.Identity)\lib\windows\x86')" />
+    <MakeDir Directories="$(LayoutsDirectory)%(SupportedHost.Identity)\lib\wasi\wasm"
+             Condition="!Exists('$(LayoutsDirectory)%(SupportedHost.Identity)\lib\wasi\wasm')" />
 
     <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -d LINUX -d X64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\linux\x64\zerolib.dll&quot;"
           WorkingDirectory="$(MSBuildThisFileDirectory)..\zerolib" />
@@ -288,6 +290,9 @@
     <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -d UEFI -d X64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\uefi\x64\zerolib.dll&quot;"
           WorkingDirectory="$(MSBuildThisFileDirectory)..\zerolib" />
     <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -d UEFI -d ARM64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\uefi\arm64\zerolib.dll&quot;"
+          WorkingDirectory="$(MSBuildThisFileDirectory)..\zerolib" />
+    <!-- WASI/WASM: zero mode only, compiled with NativeAOT-LLVM rather than bflat (see zerolib/README.md). -->
+    <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -d WASI -d WASM -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\lib\wasi\wasm\zerolib.dll&quot;"
           WorkingDirectory="$(MSBuildThisFileDirectory)..\zerolib" />
     <Exec Command="&quot;$(RunCommand)&quot; build-il --deterministic --stdlib:none -d LINUX -d X64 -o:&quot;$(LayoutsDirectory)%(SupportedHost.Identity)\ref\zerolib.dll&quot;"
           WorkingDirectory="$(MSBuildThisFileDirectory)..\zerolib" />

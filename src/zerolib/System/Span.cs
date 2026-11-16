@@ -58,7 +58,7 @@ namespace System
 #if X64 || ARM64
             if ((ulong)(uint)start + (ulong)(uint)length > (ulong)(uint)array.Length)
                 Environment.FailFast(null);
-#elif X86 || ARM
+#elif X86 || ARM || WASM
             if ((uint)start > (uint)array.Length || (uint)length > (uint)(array.Length - start))
                 Environment.FailFast(null);
 #else
@@ -105,7 +105,7 @@ namespace System
 #if X64 || ARM64
             if ((ulong)(uint)start + (ulong)(uint)length > (ulong)(uint)_length)
                 Environment.FailFast(null);
-#elif X86 || ARM
+#elif X86 || ARM || WASM
             if ((uint)start > (uint)_length || (uint)length > (uint)(_length - start))
                 Environment.FailFast(null);
 #else

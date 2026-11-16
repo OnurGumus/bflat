@@ -29,7 +29,7 @@ namespace System.Runtime.CompilerServices
         public uint Length;
 #if X64 || ARM64
         public uint Padding;
-#elif X86 || ARM
+#elif X86 || ARM || WASM
         // No padding on 32bit
 #else
 #error Nope

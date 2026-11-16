@@ -23,7 +23,7 @@ namespace System.Runtime
     // an element (stelem.ref, e.g. string[] items = { a, b }) and taking a ref to
     // one (ldelema). Without them, any such code fails to compile with
     // "Expected type 'System.Runtime.TypeCast' not found in module 'zerolib'".
-    internal static unsafe class TypeCast
+    internal static unsafe partial class TypeCast
     {
         private static void StelemRef(object[] array, nint index, object obj)
             => StartupCodeHelpers.StelemRef(array, index, obj);

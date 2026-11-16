@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-#if LINUX
+#if LINUX || WASI
 
 using System.Runtime;
 
@@ -30,6 +30,14 @@ namespace Internal.Runtime.CompilerHelpers
     // from InitializeCommandLineArgs, which the compiler calls before Main.
     unsafe partial class StartupCodeHelpers
     {
+#if WASM
+        // WASM has no linker-defined section bounds, and C# can't take the address
+        // of a data symbol there (a function "address" is a table index). The
+        // native startup shim returns &__ReadyToRunHeader instead.
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.InternalCall)]
+        [RuntimeImport("*", "ZeroGetModuleHeader")]
+        static extern byte* GetModuleHeader();
+#else
         // The linker defines these around the __modules section, which holds a
         // pointer to each module's ReadyToRunHeader. Referencing them also keeps
         // the section alive under --gc-sections.
@@ -40,6 +48,7 @@ namespace Internal.Runtime.CompilerHelpers
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.InternalCall)]
         [RuntimeImport("*", "__stop___modules")]
         static extern void ModulesStop();
+#endif
 
         const uint ReadyToRunSignature = 0x00525452; // "RTR"
         const int GCStaticRegionSection = 201;       // ReadyToRunSectionType.GCStaticRegion
@@ -57,10 +66,14 @@ namespace Internal.Runtime.CompilerHelpers
                 return;
             s_staticsInitialized = true;
 
+#if WASM
+            InitializeModuleStatics(GetModuleHeader());
+#else
             byte** module = (byte**)(delegate*<void>)&ModulesStart;
             byte** end = (byte**)(delegate*<void>)&ModulesStop;
             for (; module < end; module++)
                 InitializeModuleStatics(*module);
+#endif
         }
 
         // ReadyToRunHeader: uint Signature, ushort Major, ushort Minor, uint Flags,
@@ -81,18 +94,27 @@ namespace Internal.Runtime.CompilerHelpers
 
                 byte* start = *(byte**)(row + 8);
                 byte* stop = *(byte**)(row + 8 + sizeof(nint));
-                // Each entry is a 32-bit relative pointer to a slot.
+                // Each entry is a 32-bit pointer to a slot: relative on Linux,
+                // absolute on WASM (whose object format has no relative relocations).
                 for (byte* entry = start; entry < stop; entry += sizeof(int))
+#if WASM
+                    InitializeStaticBase(*(byte**)entry);
+#else
                     InitializeStaticBase(entry + *(int*)entry);
+#endif
             }
         }
 
-        // An uninitialized slot holds a 32-bit relative pointer to the base
-        // object's MethodTable, with flags in the low bits, optionally followed by
-        // a relative pointer to preinitialized field data.
+        // An uninitialized slot holds a pointer to the base object's MethodTable
+        // (32-bit relative on Linux, absolute on WASM), with flags in the low
+        // bits, optionally followed by a pointer to preinitialized field data.
         static void InitializeStaticBase(byte* slot)
         {
+#if WASM
+            nint target = *(nint*)slot;
+#else
             nint target = (nint)slot + *(int*)slot;
+#endif
             if ((target & Uninitialized) == 0)
                 return;
 
@@ -105,7 +127,11 @@ namespace Internal.Runtime.CompilerHelpers
             {
                 // The blob holds every field of the object (BaseSize minus the
                 // object header and MethodTable pointer).
+#if WASM
+                byte* data = *(byte**)(slot + sizeof(nint));
+#else
                 byte* data = slot + sizeof(int) + *(int*)(slot + sizeof(int));
+#endif
                 uint dataSize = size - 2 * (uint)sizeof(nint);
                 for (uint i = 0; i < dataSize; i++)
                     obj[sizeof(nint) + i] = data[i];

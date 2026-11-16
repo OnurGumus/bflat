@@ -166,6 +166,10 @@ assigningNull:
             [DllImport("libSystem.Native"), SuppressGCTransition]
             static extern MethodTable** SystemNative_Calloc(nuint num, nuint size);
             MethodTable** result = SystemNative_Calloc(1, size);
+#elif WASI
+            [DllImport("libc"), SuppressGCTransition]
+            static extern MethodTable** calloc(nuint num, nuint size);
+            MethodTable** result = calloc(1, size);
 #elif UEFI
             MethodTable** result;
             if (EfiSystemTable->BootServices->AllocatePool(2 /* LoaderData*/, (nint)size, (void**)&result) != 0)

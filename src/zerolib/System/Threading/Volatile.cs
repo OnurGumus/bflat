@@ -40,7 +40,7 @@ namespace System.Threading
         public static void Write(ref nint location, nint value)
             => Unsafe.As<nint, VolatileIntPtr>(ref location).Value = value;
 
-#if !X86
+#if !X86 && !WASM // 64-bit pointers only
         public static long Read(ref readonly long location)
             => (long)Unsafe.As<long, VolatileIntPtr>(ref Unsafe.AsRef(in location)).Value;
 
