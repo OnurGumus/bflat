@@ -28,6 +28,15 @@ namespace System.Runtime.CompilerServices
             return nonGcStaticBase;
         }
 
+        // Used for types with a static constructor and static fields of reference
+        // types. The base object itself is allocated at startup (see
+        // StartupCodeHelpers.InitializeStatics).
+        private static object CheckStaticClassConstructionReturnGCStaticBase(ref StaticClassConstructionContext context, object gcStaticBase)
+        {
+            CheckStaticClassConstruction(ref context);
+            return gcStaticBase;
+        }
+
         private static unsafe void CheckStaticClassConstruction(ref StaticClassConstructionContext context)
         {
             // Not dealing with multithreading issues.

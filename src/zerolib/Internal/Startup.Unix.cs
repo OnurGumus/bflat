@@ -29,6 +29,8 @@ namespace Internal.Runtime.CompilerHelpers
 
         internal static unsafe void InitializeCommandLineArgs(int argc, sbyte** argv)
         {
+            // The compiler calls this before Main, so it doubles as the startup hook.
+            InitializeStatics();
             s_argc = argc;
             s_argv = argv;
         }

@@ -100,6 +100,15 @@ namespace Internal.Runtime.CompilerHelpers
             return result;
         }
 
+        // .NET 10's compiler calls these specialized entry points for new T[n]
+        // (pointer-sized elements, and everything else). zerolib has a single
+        // allocator, so both forward to it.
+        [RuntimeExport("RhpNewArrayFast")]
+        static unsafe void* RhpNewArrayFast(MethodTable* pMT, int numElements) => RhpNewArray(pMT, numElements);
+
+        [RuntimeExport("RhpNewPtrArrayFast")]
+        static unsafe void* RhpNewPtrArrayFast(MethodTable* pMT, int numElements) => RhpNewArray(pMT, numElements);
+
         internal struct ArrayElement
         {
             public object Value;
@@ -115,8 +124,14 @@ namespace Internal.Runtime.CompilerHelpers
             if (obj == null)
                 goto assigningNull;
 
-            if (elementType != obj.m_pMethodTable)
-                Environment.FailFast(null); /* covariance */
+            // Accept the element type itself or anything derived from it (for a
+            // class, _relatedType is the base type), so object[] takes any object.
+            // Interface-typed arrays aren't supported.
+            for (MethodTable* type = obj.m_pMethodTable; type != elementType; type = type->_relatedType)
+            {
+                if (type == null)
+                    Environment.FailFast(null); /* covariance */
+            }
 
 doWrite:
             element = obj;
@@ -146,9 +161,11 @@ assigningNull:
             static extern MethodTable** LocalAlloc(uint flags, uint size);
             MethodTable** result = LocalAlloc(0x40, size);
 #elif LINUX
+            // calloc, not malloc: C# guarantees that a new object's fields are zero,
+            // and memory malloc reuses after a free (Arena.Destroy, libc) isn't.
             [DllImport("libSystem.Native"), SuppressGCTransition]
-            static extern MethodTable** SystemNative_Malloc(nuint size);
-            MethodTable** result = SystemNative_Malloc(size);
+            static extern MethodTable** SystemNative_Calloc(nuint num, nuint size);
+            MethodTable** result = SystemNative_Calloc(1, size);
 #elif UEFI
             MethodTable** result;
             if (EfiSystemTable->BootServices->AllocatePool(2 /* LoaderData*/, (nint)size, (void**)&result) != 0)
