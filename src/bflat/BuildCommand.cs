@@ -207,9 +207,15 @@ internal class BuildCommand : CommandBase
                 "windows" => TargetOS.Windows,
                 "linux" => TargetOS.Linux,
                 "uefi" => TargetOS.UEFI,
+                "macos" or "osx" => TargetOS.MacOS,
                 _ => throw new Exception($"Target OS '{targetOSStr}' is not supported"),
             };
         }
+
+        if (targetOS == TargetOS.MacOS && !result.GetValueForOption(NoLinkOption))
+            throw new Exception("bflat can't link macOS programs: pass -c, then link the object file on a Mac (clang)");
+        if (targetOS == TargetOS.MacOS && stdlib != StandardLibType.None)
+            throw new Exception("macOS builds need --stdlib:none and a core library of your own (-r)");
 
         OptimizationLevel optimizationLevel = nooptimize ? OptimizationLevel.Debug : OptimizationLevel.Release;
 
@@ -311,6 +317,7 @@ internal class BuildCommand : CommandBase
         {
             TargetOS.Windows or TargetOS.UEFI => Internal.TypeSystem.TargetOS.Windows,
             TargetOS.Linux => Internal.TypeSystem.TargetOS.Linux,
+            TargetOS.MacOS => Internal.TypeSystem.TargetOS.OSX,
         };
 
         string isaArg = result.GetValueForOption(TargetIsaOption);
@@ -367,6 +374,7 @@ internal class BuildCommand : CommandBase
             TargetOS.Linux => "linux",
             TargetOS.Windows => "windows",
             TargetOS.UEFI => "uefi",
+            TargetOS.MacOS => "macos",
             _ => throw new Exception(targetOS.ToString()),
         };
 
@@ -399,7 +407,8 @@ internal class BuildCommand : CommandBase
                 libPath = currentLibPath + separator + libPath;
             }
 
-            if (!Directory.Exists(currentLibPath))
+            // macOS builds are compile-only and take no library from a layout.
+            if (targetOS != TargetOS.MacOS && !Directory.Exists(currentLibPath))
             {
                 Console.Error.WriteLine($"Directory '{currentLibPath}' doesn't exist.");
                 return 1;

@@ -207,4 +207,7 @@ public enum TargetOS
     Windows,
     Linux,
     UEFI,
+    // Compile only (-c): bflat has no Mach-O linker, so the object file is
+    // linked on a Mac, with clang.
+    MacOS,
 }
