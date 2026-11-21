@@ -65,6 +65,27 @@
     <GaJitPackageFile>$(GaJitPackageId).$(GaJitVersion).nupkg</GaJitPackageFile>
   </PropertyGroup>
 
+  <!-- The linker for Linux hosts. The blobs' lld (LLVM 12) needs libtinfo.so.5,
+       which current distributions no longer ship; this one is LLVM's lld built
+       with nothing optional (tools/build-lld.sh), so it needs only the C library,
+       libm and libgcc_s. Published as a release of this repository by
+       .github/workflows/lld.yml. -->
+  <PropertyGroup>
+    <LldVersion>20.1.8</LldVersion>
+    <LldUri>https://github.com/OnurGumus/bflat/releases/download/lld-$(LldVersion)/</LldUri>
+    <LldRid Condition="'$(CompilerHost)' == 'linux-glibc-x64'">linux-x64</LldRid>
+    <LldRid Condition="'$(CompilerHost)' == 'linux-glibc-arm64'">linux-arm64</LldRid>
+    <LldFile>lld-$(LldVersion)-$(LldRid).tar.gz</LldFile>
+  </PropertyGroup>
+
+  <Target Name="DownloadLld"
+          Condition="'$(LldRid)' != '' and !Exists('$(DownloadCachePath)$(LldFile)')">
+    <DownloadFile SourceUrl="$(LldUri)lld-$(LldRid).tar.gz"
+                  Retries="3"
+                  DestinationFolder="$(DownloadCachePath)"
+                  DestinationFileName="$(LldFile)" />
+  </Target>
+
   <Target Name="DownloadGaJit"
           Condition="!Exists('$(DownloadCachePath)$(GaJitPackageFile)')">
     <Error Condition="'$(GaJitRid)' == ''" Text="No GA JIT package known for compiler host '$(CompilerHost)'." />
@@ -176,12 +197,15 @@
   </Target>
 
   <Target Name="ExtractCompilerBlob"
+          DependsOnTargets="DownloadLld"
           Inputs="$(DownloadCachePath)compiler-$(CompilerHost)-$(BlobsVersion).zip"
           Outputs="$(IntermediateOutputPath)compiler-$(CompilerHost)-$(BlobsVersion).semaphore">
 
     <Unzip SourceFiles="$(DownloadCachePath)compiler-$(CompilerHost)-$(BlobsVersion).zip"
            DestinationFolder="$(OutputPath)" />
     
+    <!-- Replace the blobs' lld with the standalone one (see LldVersion). -->
+    <Exec Command="tar -xzf &quot;$(DownloadCachePath)$(LldFile)&quot; -C &quot;$(OutputPath)bin&quot; lld" Condition="'$(LldRid)' != ''" />
     <Exec Command="chmod +x $(OutputPath)bin/lld" Condition="'$(OS)' != 'Windows_NT' and $(CompilerHost.StartsWith('linux'))" />
     <Exec Command="chmod +x $(OutputPath)bin/llvm-objcopy" Condition="'$(OS)' != 'Windows_NT' and $(CompilerHost.StartsWith('linux'))" />
 

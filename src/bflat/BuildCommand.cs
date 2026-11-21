@@ -1018,6 +1018,9 @@ internal class BuildCommand : CommandBase
             ldArgs.Append('"');
             ldArgs.Append(' ');
             ldArgs.Append("--as-needed --discard-all --gc-sections ");
+            // Keep a section that only __start_/__stop_ symbols refer to (the
+            // module list, __modules): lld 13 and later collect it otherwise.
+            ldArgs.Append("-z nostart-stop-gc ");
             ldArgs.Append("-rpath \"$ORIGIN\" ");
 
             if (buildTargetType == BuildTargetType.Shared)

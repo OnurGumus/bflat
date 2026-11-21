@@ -1,0 +1,58 @@
+# Builds the standalone lld that Linux layouts use (see LldVersion in
+# src/bflat/bflat.csproj) and publishes it as the release lld-<version>.
+# Runs when this workflow or the build script changes (which is when
+# LldVersion changes), or by hand.
+name: lld
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/lld.yml
+      - tools/build-lld.sh
+
+permissions:
+  contents: write
+
+env:
+  LLD_VERSION: 20.1.8
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - { rid: linux-x64, runner: ubuntu-22.04 }
+          - { rid: linux-arm64, runner: ubuntu-22.04-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build lld in ubuntu:22.04
+        run: |
+          mkdir out
+          docker run --rm -v "$PWD/tools:/tools:ro" -v "$PWD/out:/out" ubuntu:22.04 /tools/build-lld.sh /out
+          tools/check-lld.sh out/lld
+          tar -czf lld-${{ matrix.rid }}.tar.gz -C out lld
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lld-${{ matrix.rid }}
+          path: lld-${{ matrix.rid }}.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "lld-$LLD_VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "lld-$LLD_VERSION" lld-linux-*.tar.gz --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "lld-$LLD_VERSION" lld-linux-*.tar.gz --repo "$GITHUB_REPOSITORY" \
+              --title "lld $LLD_VERSION for bflat's Linux layouts" \
+              --notes "LLVM's lld $LLD_VERSION built with no optional dependencies (tools/build-lld.sh). Apache-2.0 WITH LLVM-exception."
+          fi
