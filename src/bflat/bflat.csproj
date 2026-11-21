@@ -75,6 +75,11 @@
     <LldUri>https://github.com/OnurGumus/bflat/releases/download/lld-$(LldVersion)/</LldUri>
     <LldRid Condition="'$(CompilerHost)' == 'linux-glibc-x64'">linux-x64</LldRid>
     <LldRid Condition="'$(CompilerHost)' == 'linux-glibc-arm64'">linux-arm64</LldRid>
+    <!-- LLVM's own lld.exe: the blobs' one is LLVM 12 (MinGW), which can't link
+         zerocore's Linux programs (-z nostart-stop-gc). -->
+    <LldRid Condition="'$(CompilerHost)' == 'windows-x64'">win-x64</LldRid>
+    <LldExe>lld</LldExe>
+    <LldExe Condition="'$(LldRid)' == 'win-x64'">lld.exe</LldExe>
     <LldFile>lld-$(LldVersion)-$(LldRid).tar.gz</LldFile>
   </PropertyGroup>
 
@@ -205,7 +210,7 @@
            DestinationFolder="$(OutputPath)" />
     
     <!-- Replace the blobs' lld with the standalone one (see LldVersion). -->
-    <Exec Command="tar -xzf &quot;$(DownloadCachePath)$(LldFile)&quot; -C &quot;$(OutputPath)bin&quot; lld" Condition="'$(LldRid)' != ''" />
+    <Exec Command="tar -xzf &quot;$(DownloadCachePath)$(LldFile)&quot; -C &quot;$(OutputPath)bin&quot; $(LldExe)" Condition="'$(LldRid)' != ''" />
     <Exec Command="chmod +x $(OutputPath)bin/lld" Condition="'$(OS)' != 'Windows_NT' and $(CompilerHost.StartsWith('linux'))" />
     <Exec Command="chmod +x $(OutputPath)bin/llvm-objcopy" Condition="'$(OS)' != 'Windows_NT' and $(CompilerHost.StartsWith('linux'))" />
 

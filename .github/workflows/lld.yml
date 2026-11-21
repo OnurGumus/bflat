@@ -1,5 +1,6 @@
-# Builds the standalone lld that Linux layouts use (see LldVersion in
-# src/bflat/bflat.csproj) and publishes it as the release lld-<version>.
+# The standalone lld the layouts use (see LldVersion in src/bflat/bflat.csproj),
+# published as the release lld-<version>: for Linux, built from source with
+# nothing optional; for Windows, LLVM's own lld.exe, which needs only Windows.
 # Runs when this workflow or the build script changes (which is when
 # LldVersion changes), or by hand.
 name: lld
@@ -10,6 +11,7 @@ on:
     paths:
       - .github/workflows/lld.yml
       - tools/build-lld.sh
+      - tools/check-lld-win.sh
 
 permissions:
   contents: write
@@ -38,8 +40,24 @@ jobs:
           name: lld-${{ matrix.rid }}
           path: lld-${{ matrix.rid }}.tar.gz
 
+  windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Take lld.exe from LLVM's Windows release
+        run: |
+          mkdir out
+          curl -sL "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLD_VERSION/clang+llvm-$LLD_VERSION-x86_64-pc-windows-msvc.tar.xz" \
+            | tar -xJ --wildcards --strip-components=2 -C out '*/bin/lld.exe'
+          tools/check-lld-win.sh out/lld.exe
+          tar -czf lld-win-x64.tar.gz -C out lld.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lld-win-x64
+          path: lld-win-x64.tar.gz
+
   release:
-    needs: build
+    needs: [build, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -50,9 +68,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "lld-$LLD_VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release upload "lld-$LLD_VERSION" lld-linux-*.tar.gz --repo "$GITHUB_REPOSITORY" --clobber
+            gh release upload "lld-$LLD_VERSION" lld-*.tar.gz --repo "$GITHUB_REPOSITORY" --clobber
           else
-            gh release create "lld-$LLD_VERSION" lld-linux-*.tar.gz --repo "$GITHUB_REPOSITORY" \
+            gh release create "lld-$LLD_VERSION" lld-*.tar.gz --repo "$GITHUB_REPOSITORY" \
               --title "lld $LLD_VERSION for bflat's Linux layouts" \
               --notes "LLVM's lld $LLD_VERSION built with no optional dependencies (tools/build-lld.sh). Apache-2.0 WITH LLVM-exception."
           fi
