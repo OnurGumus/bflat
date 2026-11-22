@@ -1083,7 +1083,14 @@ internal class BuildCommand : CommandBase
             }
         }
 
-        ldArgs.AppendJoin(' ', result.GetValueForOption(LdFlagsOption));
+        // A flag that names an existing file is one argument: quoted, so a path
+        // with spaces (C:\Users\Zoë Ann\...) reaches the linker whole. Others may
+        // hold several arguments ("-z nostart-stop-gc") and are passed as they are.
+        foreach (string flag in result.GetValueForOption(LdFlagsOption) ?? Array.Empty<string>())
+        {
+            ldArgs.Append(File.Exists(flag) && !flag.StartsWith('"') ? $"\"{flag}\"" : flag);
+            ldArgs.Append(' ');
+        }
 
         bool printCommands = result.GetValueForOption(PrintCommandsOption);
 
