@@ -1,0 +1,141 @@
+# Throwaway spike (zero-csharp SDK 0.3, Task 5): can bflat run on macOS arm64
+# and build zero-mode programs for all four targets? bflat itself is published
+# with Microsoft's NativeAOT for osx-arm64; the JITs come from Microsoft's
+# runtime.osx-arm64.microsoft.dotnet.ilcompiler; lld from Homebrew (spike only);
+# lib/ and ref/ (target-side, host-independent) from the Linux layout.
+# The programs it builds run on their own systems in the jobs after it.
+name: macOS spike
+
+on:
+  push:
+    branches: [ macos-host ]
+  workflow_dispatch:
+
+env:
+  ZERO_REF: sdk-0.3          # zero-csharp branch with mac/libSystem.tbd
+  ZERO_SDK: '0.2.2'          # its payload (zerocore, lib/, runtime objects) from nuget.org
+  ILC: '10.0.0'
+
+jobs:
+  linux-layout:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Build the Linux layouts
+        run: |
+          cd src/bflat
+          dotnet nuget add source --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/bflattened/index.json"
+          cd ../..
+          dotnet build src/bflat/bflat.csproj -t:BuildLayouts -c:Release
+          tar -czf linux-arm64-layout.tgz -C layouts/linux-glibc-arm64 .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64-layout
+          path: linux-arm64-layout.tgz
+
+  mac-build:
+    needs: linux-layout
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: bflat
+      - uses: actions/checkout@v4
+        with:
+          repository: OnurGumus/zero-csharp
+          ref: ${{ env.ZERO_REF }}
+          path: zero
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-arm64-layout
+      - name: Publish bflat for osx-arm64 (NativeAOT)
+        working-directory: bflat
+        run: |
+          cd src/bflat
+          dotnet nuget add source --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/bflattened/index.json"
+          cd ../..
+          # CompilerHost only satisfies the project's per-host downloads; the
+          # published bflat is the osx-arm64 one.
+          dotnet publish src/bflat/bflat.csproj -c Release -r osx-arm64 -p:PublishAot=true \
+            -p:CompilerHost=linux-glibc-arm64 -o "$RUNNER_TEMP/bflat-publish" 2>&1 | tail -20
+          ls -la "$RUNNER_TEMP/bflat-publish"
+          file "$RUNNER_TEMP/bflat-publish/bflat"
+      - name: Assemble the osx-arm64 layout
+        run: |
+          L=$RUNNER_TEMP/layout
+          mkdir -p "$L" linux && tar -xzf linux-arm64-layout.tgz -C linux
+          cp -R linux/lib linux/ref "$L/"
+          cp linux/THIRD-PARTY-NOTICES.TXT linux/WindowsAPIs.txt "$L/" || true
+          cp "$RUNNER_TEMP/bflat-publish/bflat" "$L/"
+          for f in "$RUNNER_TEMP"/bflat-publish/*.dylib; do [ -e "$f" ] && cp "$f" "$L/"; done
+          curl -sL -o ilc.nupkg "https://api.nuget.org/v3-flatcontainer/runtime.osx-arm64.microsoft.dotnet.ilcompiler/$ILC/runtime.osx-arm64.microsoft.dotnet.ilcompiler.$ILC.nupkg"
+          mkdir ilc && (cd ilc && unzip -q ../ilc.nupkg)
+          cp ilc/tools/libclrjit_*.dylib ilc/tools/libjitinterface_arm64.dylib "$L/"
+          brew install lld > /dev/null
+          mkdir -p "$L/bin" && cp "$(brew --prefix lld)/bin/lld" "$L/bin/lld"
+          ls -la "$L" "$L/bin"
+          otool -L "$L/bflat" "$L/bin/lld" | head -20
+      - name: Build the test programs for all four targets
+        run: |
+          set -x
+          L=$RUNNER_TEMP/layout; B=$L/bflat
+          curl -sL -o sdk.nupkg "https://api.nuget.org/v3-flatcontainer/zerocsharp.sdk/$ZERO_SDK/zerocsharp.sdk.$ZERO_SDK.nupkg"
+          mkdir sdk && (cd sdk && unzip -q ../sdk.nupkg)
+          P=$PWD/sdk/payload
+          mkdir -p mac out/linux-x64 out/linux-arm64 out/win-x64 out/osx-arm64
+          clang -target arm64-apple-macos11 -O2 -c zero/mac/runtime.c -o mac/runtime.o
+          clang -target arm64-apple-macos11 -c zero/zerocore/native/mac-arm64.S -o mac/zerocore.o
+          printf 'public static class Program { public static int Main() { Out.Line("hi"); return 0; } }\n' > Hello.cs
+          zero/scripts/llama-model-cs.sh Stories260K.cs
+          COMMON="-r $P/ref/System.Private.CoreLib.dll -r $P/ref/BflatLib.dll --stdlib:none --no-reflection --langversion preview -i libc -i libm.so.6"
+          for prog in Hello Llama; do
+            src=Hello.cs; [ $prog = Llama ] && src="zero/samples/Llama.cs Stories260K.cs"
+            "$B" build $src $COMMON --os linux --arch x64 --ldflags "$P/native/linux-x64/zerocore.o" --ldflags "-z nostart-stop-gc" -o out/linux-x64/$prog
+            "$B" build $src $COMMON --os linux --arch arm64 --ldflags "$P/native/linux-arm64/zerocore.o" --ldflags "-z nostart-stop-gc" --ldflags "-z max-page-size=4096" -o out/linux-arm64/$prog
+            "$B" build $src $COMMON --os windows --arch x64 --ldflags /entry:zero_start --ldflags "$P/native/win-x64/runtime.obj" --ldflags "$P/native/win-x64/zerocore.obj" -o out/win-x64/$prog.exe
+            "$B" build $src $COMMON --os macos --arch arm64 -c -o mac/$prog.o
+            "$L/bin/lld" -flavor darwin -arch arm64 -platform_version macos 11.0 11.0 -fixup_chains -dead_strip \
+              mac/$prog.o mac/runtime.o mac/zerocore.o zero/mac/libSystem.tbd \
+              -alias 'section$start$__DATA$__modules' ___start___modules -alias 'section$end$__DATA$__modules' ___stop___modules \
+              -o out/osx-arm64/$prog
+          done
+          file out/*/*
+          cp zero/tests/expected/Llama.txt out/
+      - name: Run the macOS programs here
+        run: |
+          codesign -v out/osx-arm64/Hello out/osx-arm64/Llama
+          [ "$(out/osx-arm64/Hello)" = hi ]
+          diff <(out/osx-arm64/Llama) out/Llama.txt && echo "macOS: both right"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: programs
+          path: out
+
+  run-elsewhere:
+    needs: mac-build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: linux-x64, runner: ubuntu-24.04, exe: '' }
+          - { rid: linux-arm64, runner: ubuntu-24.04-arm, exe: '' }
+          - { rid: win-x64, runner: windows-latest, exe: '.exe' }
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: programs
+      - name: Run the programs built on macOS
+        run: |
+          chmod +x ${{ matrix.rid }}/* || true
+          [ "$(${{ matrix.rid }}/Hello${{ matrix.exe }} | tr -d '\r')" = hi ]
+          diff <(${{ matrix.rid }}/Llama${{ matrix.exe }} | tr -d '\r') <(tr -d '\r' < Llama.txt) && echo "${{ matrix.rid }}: both right"
