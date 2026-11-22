@@ -68,8 +68,8 @@ jobs:
           mkdir sdk && (cd sdk && unzip -q ../sdk.nupkg)
           P=$PWD/sdk/payload
           mkdir -p mac out/linux-x64 out/linux-arm64 out/win-x64 out/osx-arm64
-          clang -target arm64-apple-macos11 -O2 -c zero/mac/runtime.c -o mac/runtime.o
-          clang -target arm64-apple-macos11 -c zero/zerocore/native/mac-arm64.S -o mac/zerocore.o
+          clang -target arm64-apple-macos12 -O2 -c zero/mac/runtime.c -o mac/runtime.o
+          clang -target arm64-apple-macos12 -c zero/zerocore/native/mac-arm64.S -o mac/zerocore.o
           printf 'public static class Program { public static int Main() { Out.Line("hi"); return 0; } }\n' > Hello.cs
           zero/scripts/llama-model-cs.sh Stories260K.cs
           COMMON="-r $P/ref/System.Private.CoreLib.dll -r $P/ref/BflatLib.dll --stdlib:none --no-reflection --langversion preview -i libc -i libm.so.6"
@@ -79,7 +79,7 @@ jobs:
             "$B" build $src $COMMON --os linux --arch arm64 --ldflags "$P/native/linux-arm64/zerocore.o" --ldflags "-z nostart-stop-gc" --ldflags "-z max-page-size=4096" -o out/linux-arm64/$prog
             "$B" build $src $COMMON --os windows --arch x64 --ldflags /entry:zero_start --ldflags "$P/native/win-x64/runtime.obj" --ldflags "$P/native/win-x64/zerocore.obj" -o out/win-x64/$prog.exe
             "$B" build $src $COMMON --os macos --arch arm64 -c -o mac/$prog.o
-            osx-arm64/bin/lld -flavor darwin -arch arm64 -platform_version macos 11.0 11.0 -fixup_chains -dead_strip \
+            osx-arm64/bin/lld -flavor darwin -arch arm64 -platform_version macos 12.0 12.0 -fixup_chains -dead_strip \
               mac/$prog.o mac/runtime.o mac/zerocore.o zero/mac/libSystem.tbd -o out/osx-arm64/$prog
           done
           cp zero/tests/expected/Llama.txt out/
