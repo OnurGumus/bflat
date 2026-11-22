@@ -17,9 +17,11 @@
 # Env:    LLD_TGZ   a local lld-osx-arm64.tar.gz instead of the release's
 #         GITHUB_TOKEN   for the bflattened package feed, as BuildLayouts needs
 set -euo pipefail
-cd "$(dirname "$0")/.."
+# The arguments are relative to where it's run from; the work, to the checkout.
 linux=$(cd "${1:?linux-glibc-arm64 layout}" && pwd)
 out=${2:?out dir}
+case "$out" in /*) ;; *) out=$PWD/$out ;; esac
+cd "$(dirname "$0")/.."
 [ "$(uname -s)-$(uname -m)" = Darwin-arm64 ] || { echo "Error: run this on an Apple Silicon Mac." >&2; exit 1; }
 [ -f "$linux/bflat" ] && [ -d "$linux/lib" ] && [ -d "$linux/ref" ] || { echo "Error: $linux isn't a bflat Linux layout." >&2; exit 1; }
 
