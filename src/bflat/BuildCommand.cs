@@ -179,6 +179,8 @@ internal class BuildCommand : CommandBase
             targetOS = TargetOS.Windows;
         else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             targetOS = TargetOS.Linux;
+        else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            targetOS = TargetOS.MacOS;
         else
             throw new NotImplementedException();
         
