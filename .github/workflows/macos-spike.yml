@@ -102,7 +102,6 @@ jobs:
             "$B" build $src $COMMON --os macos --arch arm64 -c -o mac/$prog.o
             "$L/bin/lld" -flavor darwin -arch arm64 -platform_version macos 11.0 11.0 -fixup_chains -dead_strip \
               mac/$prog.o mac/runtime.o mac/zerocore.o zero/mac/libSystem.tbd \
-              -alias 'section$start$__DATA$__modules' ___start___modules -alias 'section$end$__DATA$__modules' ___stop___modules \
               -o out/osx-arm64/$prog
           done
           file out/*/*
