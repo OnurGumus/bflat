@@ -1,7 +1,7 @@
 # Throwaway spike (zero-csharp SDK 0.3, Task 5): can bflat run on macOS arm64
 # and build zero-mode programs for all four targets? bflat itself is published
 # with Microsoft's NativeAOT for osx-arm64; the JITs come from Microsoft's
-# runtime.osx-arm64.microsoft.dotnet.ilcompiler; lld from Homebrew (spike only);
+# runtime.osx-arm64.microsoft.dotnet.ilcompiler; lld is LLVM's macOS release;
 # lib/ and ref/ (target-side, host-independent) from the Linux layout.
 # The programs it builds run on their own systems in the jobs after it.
 name: macOS spike
@@ -77,8 +77,10 @@ jobs:
           curl -sL -o ilc.nupkg "https://api.nuget.org/v3-flatcontainer/runtime.osx-arm64.microsoft.dotnet.ilcompiler/$ILC/runtime.osx-arm64.microsoft.dotnet.ilcompiler.$ILC.nupkg"
           mkdir ilc && (cd ilc && unzip -q ../ilc.nupkg)
           cp ilc/tools/libclrjit_*.dylib ilc/tools/libjitinterface_arm64.dylib "$L/"
-          brew install lld > /dev/null
-          mkdir -p "$L/bin" && cp "$(brew --prefix lld)/bin/lld" "$L/bin/lld"
+          mkdir -p "$L/bin"
+          curl -sL "https://github.com/llvm/llvm-project/releases/download/llvmorg-20.1.8/LLVM-20.1.8-macOS-ARM64.tar.xz" \
+            | tar -xJ --strip-components=2 -C "$L/bin" '*/bin/lld'
+          bflat/tools/check-lld-mac.sh "$L/bin/lld"
           ls -la "$L" "$L/bin"
           otool -L "$L/bflat" "$L/bin/lld" | head -20
       - name: Build the test programs for all four targets
