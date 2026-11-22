@@ -1,8 +1,9 @@
 # The standalone lld the layouts use (see LldVersion in src/bflat/bflat.csproj),
 # published as the release lld-<version>: for Linux, built from source with
-# nothing optional; for Windows, LLVM's own lld.exe, which needs only Windows.
-# Runs when this workflow or the build script changes (which is when
-# LldVersion changes), or by hand.
+# nothing optional; for Windows and macOS (arm64), LLVM's own lld, which needs
+# only the system. Builds when this workflow or the scripts change (which is
+# when LldVersion changes); publishes only when run by hand, and then only the
+# files the release doesn't have yet.
 name: lld
 
 on:
@@ -12,6 +13,7 @@ on:
       - .github/workflows/lld.yml
       - tools/build-lld.sh
       - tools/check-lld-win.sh
+      - tools/check-lld-mac.sh
 
 permissions:
   contents: write
@@ -56,8 +58,25 @@ jobs:
           name: lld-win-x64
           path: lld-win-x64.tar.gz
 
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Take lld from LLVM's macOS arm64 release
+        run: |
+          mkdir out
+          curl -sL "https://github.com/llvm/llvm-project/releases/download/llvmorg-$LLD_VERSION/LLVM-$LLD_VERSION-macOS-ARM64.tar.xz" \
+            | tar -xJ --strip-components=2 -C out '*/bin/lld'
+          tools/check-lld-mac.sh out/lld
+          tar -czf lld-osx-arm64.tar.gz -C out lld
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lld-osx-arm64
+          path: lld-osx-arm64.tar.gz
+
   release:
-    needs: [build, windows]
+    if: github.event_name == 'workflow_dispatch'
+    needs: [build, windows, macos]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -68,7 +87,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "lld-$LLD_VERSION" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            gh release upload "lld-$LLD_VERSION" lld-*.tar.gz --repo "$GITHUB_REPOSITORY" --clobber
+            # Only what's missing: replacing a file would change what earlier
+            # layouts were built with.
+            have=$(gh release view "lld-$LLD_VERSION" --repo "$GITHUB_REPOSITORY" --json assets -q '.assets[].name')
+            for f in lld-*.tar.gz; do
+              grep -qx "$f" <<< "$have" && continue
+              gh release upload "lld-$LLD_VERSION" "$f" --repo "$GITHUB_REPOSITORY"
+            done
           else
             gh release create "lld-$LLD_VERSION" lld-*.tar.gz --repo "$GITHUB_REPOSITORY" \
               --title "lld $LLD_VERSION for bflat's Linux layouts" \
