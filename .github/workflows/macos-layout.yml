@@ -14,7 +14,7 @@ on:
 
 env:
   ZERO_REF: master           # zero-csharp: mac/ and samples
-  ZERO_SDK: '0.3.0'          # its payload (zerocore, lib/, runtime objects) from nuget.org
+  ZERO_SDK: '0.7.0'          # its payload (zerocore, lib/, runtime objects) from nuget.org
 
 jobs:
   linux-layout:
